@@ -47,4 +47,9 @@ required-environments = "sys_platform == 'win32' and platform_machine == 'AMD64'
 # 混合布局：common 在项目根目录，shop_brain_graph 在 src/ 下，必须显式声明两个搜索位置
 [tool.setuptools.packages.find]
 where = ["src", "."]
+
+[dependency-groups]
+dev = [
+    "rich>=15.0.0",
+]
 # include = ["shop_brain_graph*", "common*"]

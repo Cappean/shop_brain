@@ -47,3 +47,23 @@ KeyError: 'task'
 2026-09-04 19:24:48.893 | INFO     | logger.py           :fix_log_position:90   - 最终状态: null
 2026-09-04 19:24:48.894 | INFO     | logger.py           :fix_log_position:90   - 图结构:
 2026-09-04 19:24:49.282 | INFO     | logger.py           :fix_log_position:90   - ===== 测试结束 =====
+2026-09-04 20:36:07.942 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点开始，追踪ID=1234567890
+2026-09-04 20:36:08.045 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点完成，追踪ID=1234567890，耗时=102ms
+2026-09-04 20:36:28.517 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点开始，追踪ID=1234567890
+2026-09-04 20:36:28.618 | ERROR    | logger.py           :fix_log_position:90   - 错误。文件路径不存在。E:\UV_LLM_progrems\shop_brain\doc\input\手册.pdf
+2026-09-04 20:36:28.619 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点完成，追踪ID=1234567890，耗时=101ms
+2026-09-04 20:36:56.282 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点开始，追踪ID=1234567890
+2026-09-04 20:36:56.386 | ERROR    | logger.py           :fix_log_position:90   - 错误。暂时不支持的文件类型。E:\UV_LLM_progrems\shop_brain\doc\input
+2026-09-04 20:36:56.388 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点完成，追踪ID=1234567890，耗时=105ms
+2026-09-04 20:37:43.660 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点开始，追踪ID=1234567890
+2026-09-04 20:37:43.764 | ERROR    | logger.py           :fix_log_position:90   - 错误。暂时不支持的文件类型。.
+2026-09-04 20:37:43.765 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点完成，追踪ID=1234567890，耗时=105ms
+2026-09-04 20:40:56.093 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点开始，追踪ID=1234567890
+2026-09-04 20:40:56.192 | ERROR    | logger.py           :fix_log_position:90   - 错误。暂时不支持的文件类型。.
+2026-09-04 20:40:56.193 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点完成，追踪ID=1234567890，耗时=100ms
+2026-09-04 20:42:07.907 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点开始，追踪ID=1234567890
+2026-09-04 20:42:08.013 | ERROR    | logger.py           :fix_log_position:90   - 错误。暂时不支持的文件类型。.
+2026-09-04 20:42:08.015 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点完成，追踪ID=1234567890，耗时=107ms
+2026-09-04 20:48:04.470 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点开始，追踪ID=1234567890
+2026-09-04 20:48:04.569 | ERROR    | logger.py           :fix_log_position:90   - 错误。没有输入文件路径或没有配置输出目录
+2026-09-04 20:48:04.570 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点完成，追踪ID=1234567890，耗时=99ms

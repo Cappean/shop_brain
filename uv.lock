@@ -3504,7 +3504,7 @@ wheels = [
 ]
 
 [[package]]
-name = "shopkeeper-brain-2026"
+name = "shop-brain"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

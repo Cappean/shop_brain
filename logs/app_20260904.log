@@ -1,0 +1,49 @@
+2026-09-04 18:43:30.586 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点开始，追踪ID=-
+2026-09-04 18:43:30.755 | ERROR    | logger.py           :fix_log_position:90   - [node_entry] 节点异常，追踪ID=-
+Traceback (most recent call last):
+
+  File "e:\UV_LLM_progrems\shop_brain\src\shop_brain_graph\import_process\nodes\node_entry.py", line 29, in <module>
+    node_entry(state)
+    │          └ {'task_id': '', 'is_pdf_read_enabled': False, 'is_md_read_enabled': False, 'local_dir': '', 'local_file_path': '', 'pdf_path'...
+    └ <function node_entry at 0x000001F01BB08FE0>
+
+> File "E:\UV_LLM_progrems\shop_brain\common\logging\logger.py", line 123, in wrapper
+    result = func(state, *args, **kwargs)
+             │    │       │       └ {}
+             │    │       └ ()
+             │    └ {'task_id': '', 'is_pdf_read_enabled': False, 'is_md_read_enabled': False, 'local_dir': '', 'local_file_path': '', 'pdf_path'...
+             └ <function node_entry at 0x000001F01995C720>
+
+  File "e:\UV_LLM_progrems\shop_brain\src\shop_brain_graph\import_process\nodes\node_entry.py", line 18, in node_entry
+    add_running_task(task_id=state['task'],node_name="node_entry")
+    │                        └ {'task_id': '', 'is_pdf_read_enabled': False, 'is_md_read_enabled': False, 'local_dir': '', 'local_file_path': '', 'pdf_path'...
+    └ <function add_running_task at 0x000001F01BB089A0>
+
+KeyError: 'task'
+2026-09-04 18:44:09.159 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点开始，追踪ID=-
+2026-09-04 18:44:09.253 | INFO     | logger.py           :fix_log_position:90   - 我会得到的id是:::
+2026-09-04 18:44:09.254 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点完成，追踪ID=-，耗时=94ms
+2026-09-04 19:13:49.005 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点开始，追踪ID=-
+2026-09-04 19:13:49.061 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点完成，追踪ID=-，耗时=54ms
+2026-09-04 19:13:49.061 | INFO     | logger.py           :fix_log_position:90   - node_entry: %s
+2026-09-04 19:14:12.927 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点开始，追踪ID=-
+2026-09-04 19:14:12.983 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点完成，追踪ID=-，耗时=55ms
+2026-09-04 19:14:12.985 | INFO     | logger.py           :fix_log_position:90   - node_entry: True
+2026-09-04 19:24:48.623 | INFO     | logger.py           :fix_log_position:90   - ===== 开始测试 =====
+2026-09-04 19:24:48.859 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点开始，追踪ID=-
+2026-09-04 19:24:48.863 | INFO     | logger.py           :fix_log_position:90   - [node_entry] 节点完成，追踪ID=-，耗时=3ms
+2026-09-04 19:24:48.865 | INFO     | logger.py           :fix_log_position:90   - [node_pdf_to_md] 节点开始，追踪ID=-
+2026-09-04 19:24:48.867 | INFO     | logger.py           :fix_log_position:90   - [node_pdf_to_md] 节点完成，追踪ID=-，耗时=1ms
+2026-09-04 19:24:48.870 | INFO     | logger.py           :fix_log_position:90   - [node_md_img] 节点开始，追踪ID=-
+2026-09-04 19:24:48.872 | INFO     | logger.py           :fix_log_position:90   - [node_md_img] 节点完成，追踪ID=-，耗时=1ms
+2026-09-04 19:24:48.875 | INFO     | logger.py           :fix_log_position:90   - [node_document_split] 节点开始，追踪ID=-
+2026-09-04 19:24:48.877 | INFO     | logger.py           :fix_log_position:90   - [node_document_split] 节点完成，追踪ID=-，耗时=2ms
+2026-09-04 19:24:48.880 | INFO     | logger.py           :fix_log_position:90   - [node_item_name_recognition] 节点开始，追踪ID=-
+2026-09-04 19:24:48.881 | INFO     | logger.py           :fix_log_position:90   - [node_item_name_recognition] 节点完成，追踪ID=-，耗时=1ms
+2026-09-04 19:24:48.884 | INFO     | logger.py           :fix_log_position:90   - [node_bge_embedding] 节点开始，追踪ID=-
+2026-09-04 19:24:48.886 | INFO     | logger.py           :fix_log_position:90   - [node_bge_embedding] 节点完成，追踪ID=-，耗时=2ms
+2026-09-04 19:24:48.888 | INFO     | logger.py           :fix_log_position:90   - [node_import_milvus] 节点开始，追踪ID=-
+2026-09-04 19:24:48.890 | INFO     | logger.py           :fix_log_position:90   - [node_import_milvus] 节点完成，追踪ID=-，耗时=1ms
+2026-09-04 19:24:48.893 | INFO     | logger.py           :fix_log_position:90   - 最终状态: null
+2026-09-04 19:24:48.894 | INFO     | logger.py           :fix_log_position:90   - 图结构:
+2026-09-04 19:24:49.282 | INFO     | logger.py           :fix_log_position:90   - ===== 测试结束 =====

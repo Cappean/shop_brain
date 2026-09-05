@@ -8,6 +8,8 @@ from pathlib import Path
 from rich import print as rprint
 from utils.path_util import PROJECT_ROOT
 import time
+import shutil
+from utils.task_utils import add_done_task,add_running_task
 
 @node_log("node_pdf_to_md")
 def node_pdf_to_md(state: ImportGraphState) -> ImportGraphState:
@@ -71,9 +73,10 @@ def node_pdf_to_md(state: ImportGraphState) -> ImportGraphState:
 
     except Exception as err:
         print(err)
-    # TODO 调用Mineru 获得成果文件 轮询直到返回.
 
-    batch_id = batch_id # 放了屁，表示前面已经有了batch_id 
+
+    # TODO 调用Mineru 获得成果文件 轮询直到返回.
+    batch_id = batch_id # 放了个屁，表示前面已经有了batch_id 
     url = f"https://mineru.net/api/v4/extract-results/batch/{batch_id}"
     header = {
     "Content-Type": "application/json",
@@ -91,12 +94,12 @@ def node_pdf_to_md(state: ImportGraphState) -> ImportGraphState:
             rprint("****"*20)
             print(f"获得的下载地址{res['data']['extract_result'][0]['full_zip_url']}")
             rprint("****"*20)
+            # TODO: 下载文件，保存到out_dir
             res = requests.get(res['data']['extract_result'][0]['full_zip_url'])
-            with open(output_dir/"output.zip","wb") as f:
+            with open(output_dir/f"{file_name}_result.zip","wb") as f:
                 f.write(res.content)
             break
-            # TODO: 下载文件，保存到out_dir
-            print()
+
         elif res['data']['extract_result'][0]['state'] == 'failed':
             raise RuntimeError("mineru 解析失败")
         else:
@@ -104,9 +107,20 @@ def node_pdf_to_md(state: ImportGraphState) -> ImportGraphState:
             time.sleep(interval)
             continue
     
+    # TODO: 解压文件，获得md文件并且遍历解压目录找到md文件并且重命名.
+    zip_path_obj = output_dir/f"{file_name}_result.zip"
+    extract_path_obj = output_dir/f"{file_name}"
+    logger.warning(f"我的解压路径是：{extract_path_obj}")
+    shutil.unpack_archive(zip_path_obj, extract_path_obj)
+    md_file_list = list(extract_path_obj.rglob("*.md")) # Path 对象，如果是文件夹的话，glob 是查找，rglob 是递归查找。返回的是生成器对象，可以转换成list
+    if not md_file_list :
+        raise RuntimeError("解压目录中，没有找到md文件")
+    else:
+        md_file = md_file_list[0] # 默认找到的是full.md 但是有可能某次更新之后就找不到这个文档了。
+        md_file.rename(extract_path_obj/f"{file_name}.md")
 
     # TODO: 运行完添加到done_task
-    
+    add_done_task(task_id=state["task_id"],node_name="node_pdf_to_md")
 
     
     return state

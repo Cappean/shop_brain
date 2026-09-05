@@ -8,3 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+
+# logs也要忽略
+logs/

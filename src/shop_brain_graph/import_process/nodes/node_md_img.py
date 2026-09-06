@@ -1,3 +1,5 @@
+import base64
+from mimetypes import guess_type
 import sys
 
 from common.logging.logger import logger, node_log
@@ -6,6 +8,8 @@ from utils.task_utils import add_running_task,add_done_task
 from utils.lm.lm_utils import get_llm_client
 from common.config.lm_config import lm_config
 from utils.load_prompt import load_prompt
+from langchain_core.output_parsers import StrOutputParser
+from langchain.messages import HumanMessage
 
 from pathlib import Path
 import re
@@ -92,8 +96,25 @@ def node_md_img(state: ImportGraphState) -> ImportGraphState:
         prompt = load_prompt("image_summary",root_folder = state["file_title"],image_content = image_content)
         logger.info(f"这是这个图片的prompt: {prompt}")
 
-        stroutParser = StrOutParser()
-        chain = 
+        stroutParser = StrOutputParser()
+        chain = vision_lm | stroutParser 
+
+        image_base64_str = base64.b64encode(image.read_bytes()).decode('utf-8')
+        message = HumanMessage(
+            content=[
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{guess_type(image_name)[0]};base64,{image_base64_str}"}
+                },  # 图片
+                {
+                    "type": "text", "text": prompt
+                }  # 文本
+            ]
+        )
+        summary_result = chain.invoke([message])
+        
+        logger.error(f"这是这个图片的摘要: {summary_result}")
+
 
     # TODO 然后将获得的摘要用正则替换掉md_content 中的图片的内容。替换图片的摘要部分就完成了。
 

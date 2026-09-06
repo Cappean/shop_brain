@@ -3,7 +3,12 @@ import sys
 from common.logging.logger import logger, node_log
 from shop_brain_graph.import_process.state import ImportGraphState, create_default_state,get_default_state
 from utils.task_utils import add_running_task,add_done_task
+from utils.lm.lm_utils import get_llm_client
+from common.config.lm_config import lm_config
+from utils.load_prompt import load_prompt
+
 from pathlib import Path
+import re
 
 @node_log("node_md_img")
 def node_md_img(state: ImportGraphState) -> ImportGraphState:
@@ -55,6 +60,9 @@ def node_md_img(state: ImportGraphState) -> ImportGraphState:
         logger.warning(f"路径：{md_path } 对应md 文档无images文件夹，请核实md文件内是否存在图片。")
         return state
 
+    # TODO 从文档中读取内容并校验 ：
+    state["md_content"] = md_path.read_text(encoding="utf-8")
+    
     # TODO 遍历图片所在的目录，对于每一张图片，
     # 1拿到图片名，
     # 2然后它的路径，
@@ -62,9 +70,30 @@ def node_md_img(state: ImportGraphState) -> ImportGraphState:
     # 最后放到一个列表里面 
     images_info_list = []
     for image in images_dir.iterdir():
-        image_name = image.exists()
+        image_name = image.name
+        search_target = re.escape(image_name) # 使用 re.escape() 函数来转义特殊字符
 
-    # TODO 然后1.文件名，2.图片 3.上下文成为提示词，调用视觉模型获得摘要
+        # 正则匹配md文档中的格式: ![alt text](/path/to/image.png)
+        pattern = r'!\[(.*?)\]\(([^)]*' + search_target + r'[^)]*)\)'
+        match = re.search(pattern, state["md_content"])
+        if match :
+            logger.info(f"用正则匹配到的match对象是: {match}")
+        else : 
+            logger.warning("该图片未出现在md中")
+            continue # 因为图片不存在，一旦放过去，那么就会有空指针。
+
+        pre_context = state["md_content"][max(0,match.start()-100):match.start()]
+        post_context = state["md_content"][match.end():min(len(state["md_content"]),match.end()+100)]
+        logger.info(f"这是这个图片匹配到的上文{pre_context}，\n这是这个图片匹配到的下文{post_context}")
+
+    # TODO 然后1.文件名，2.图片 3.上下文组合生成提示词，调用视觉模型获得摘要
+        vision_lm = get_llm_client(lm_config.vl_model)
+        image_content = (pre_context,post_context)
+        prompt = load_prompt("image_summary",root_folder = state["file_title"],image_content = image_content)
+        logger.info(f"这是这个图片的prompt: {prompt}")
+
+        stroutParser = StrOutParser()
+        chain = 
 
     # TODO 然后将获得的摘要用正则替换掉md_content 中的图片的内容。替换图片的摘要部分就完成了。
 
@@ -85,3 +114,4 @@ if __name__ == "__main__":
         md_path = r"E:\UV_LLM_progrems\shop_brain\doc\output\hak180产品安全手册\hak180产品安全手册.md",
         file_title = "hak180产品安全手册"
     )
+    node_md_img(state)

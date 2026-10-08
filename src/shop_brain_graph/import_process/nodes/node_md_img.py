@@ -13,6 +13,10 @@ from langchain.messages import HumanMessage
 
 from pathlib import Path
 import re
+from io import BytesIO
+
+from common.config.minio_config import minio_config
+from utils.clients.minio_utils import get_minio_client
 
 @node_log("node_md_img")
 def node_md_img(state: ImportGraphState) -> ImportGraphState:
@@ -123,6 +127,45 @@ def node_md_img(state: ImportGraphState) -> ImportGraphState:
     # TODO 最后将修改后的md_content 写入到md_path旁边，就是在原来的文件名字后面加：_processed.md。完成图片处理。
 
     # TODO 添加到前端要用的运行完成节点
+    # 上传并记录图片 URL。仅处理 Markdown 中实际引用的图片。
+    minio_client = get_minio_client()
+    if minio_client is None or not minio_config.bucket_name:
+        raise RuntimeError("MinIO 客户端或 bucket 未配置")
+    endpoint = (minio_config.endpoint or "").rstrip("/")
+    if not endpoint.startswith(("http://", "https://")):
+        endpoint = f"{'https' if minio_config.minio_secure else 'http'}://{endpoint}"
+    image_url_map = {}
+    for image in images_dir.iterdir():
+        if not image.is_file():
+            continue
+        image_name = image.name
+        if not re.search(r"!\[[^\]]*\]\([^)]*" + re.escape(image_name) + r"[^)]*\)", state["md_content"]):
+            logger.warning(f"Markdown 未引用图片，跳过：{image_name}")
+            continue
+        prefix = (minio_config.minio_img_dir or "images").strip("/")
+        object_name = f"{prefix}/{file_name}/{image_name}"
+        data = image.read_bytes()
+        logger.info(f"开始上传图片：{image_name}")
+        minio_client.put_object(minio_config.bucket_name, object_name, BytesIO(data),
+                                length=len(data), content_type=guess_type(image_name)[0] or "application/octet-stream")
+        image_url_map[image_name] = f"{endpoint}/{minio_config.bucket_name}/{object_name}"
+        logger.info(f"图片上传完成：{image_url_map[image_name]}")
+
+    # 只替换 Markdown 图片语法中的 URL，保留 alt 文本。
+    markdown_image_pattern = re.compile(r"(!\[[^\]]*\]\()([^)]*)(\))")
+    def replace_image_url(match):
+        for image_name, image_url in image_url_map.items():
+            if image_name in match.group(2):
+                logger.info(f"替换图片 URL：{match.group(2)} -> {image_url}")
+                return match.group(1) + image_url + match.group(3)
+        return match.group(0)
+    state["md_content"] = markdown_image_pattern.sub(replace_image_url, state["md_content"])
+
+    # 保存为新文件，保留原始 Markdown 不被覆盖。
+    processed_md_path = md_path.with_name(f"{md_path.stem}_processed{md_path.suffix}")
+    processed_md_path.write_text(state["md_content"], encoding="utf-8")
+    logger.info(f"处理后的 Markdown 已保存：{processed_md_path}")
+
     add_done_task(state["task_id"],"node_md_img")
 
     return state

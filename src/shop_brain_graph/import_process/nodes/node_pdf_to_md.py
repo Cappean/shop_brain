@@ -117,7 +117,14 @@ def node_pdf_to_md(state: ImportGraphState) -> ImportGraphState:
         raise RuntimeError("解压目录中，没有找到md文件")
     else:
         md_file = md_file_list[0] # 默认找到的是full.md 但是有可能某次更新之后就找不到这个文档了。
-        md_file.rename(extract_path_obj/f"{file_name}.md")
+        md_path = extract_path_obj/f"{file_name}.md"
+        # Windows 下 Path.rename() 遇到同名目标文件会报 FileExistsError。
+        # 使用 replace() 可以在重复运行时覆盖旧的 Markdown 文件。
+        md_file.replace(md_path)
+
+        # 将生成的 Markdown 文件路径写回状态，供后续节点读取。
+        state["md_path"] = md_path
+        logger.info(f"PDF 转换完成，Markdown 路径已回填：{md_path}")
 
     # TODO: 运行完添加到done_task
     add_done_task(task_id=state["task_id"],node_name="node_pdf_to_md")

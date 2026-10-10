@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="paper">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>一言 · 墨</title>
+<style>
+/* ==========================================================================
+   0. 重置与根变量
+   ========================================================================== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--sans);
+  background:var(--paper);
+  color:var(--ink);
+  cursor:crosshair;
+  transition:background-color .7s cubic-bezier(.22,1,.36,1),
+             color .7s cubic-bezier(.22,1,.36,1);
+}
+
+:root{
+  --paper:#f2efe6;
+  --ink:#1a1713;
+  --ink-soft:rgba(26,23,19,.44);
+  --ink-faint:rgba(26,23,19,.13);
+  --ink-ghost:rgba(26,23,19,.05);
+  --rule:rgba(26,23,19,.14);
+  --cinnabar:#b33a2b;
+  --halo:rgba(242,239,230,.92);
+  --grain-blend:multiply;
+  --grain-opacity:.42;
+  --serif:"Songti SC","STSong","SimSun","Source Han Serif SC","Noto Serif CJK SC","Noto Serif SC","PT Serif",serif;
+  --sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Source Han Sans SC",-apple-system,"Segoe UI",sans-serif;
+  --mono:"SFMono-Regular","JetBrains Mono","Cascadia Code","Roboto Mono",Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="ink"]{
+  --paper:#0c0a08;
+  --ink:#e8e4d9;
+  --ink-soft:rgba(232,228,217,.42);
+  --ink-faint:rgba(232,228,217,.12);
+  --ink-ghost:rgba(232,228,217,.055);
+  --rule:rgba(232,228,217,.16);
+  --cinnabar:#d1503c;
+  --halo:rgba(12,10,8,.94);
+  --grain-blend:screen;
+  --grain-opacity:.28;
+}
+
+/* ==========================================================================
+   1. 渲染层
+   ========================================================================== */
+#gl,#brush{position:fixed;inset:0;width:100%;height:100%;display:block}
+#gl{z-index:0}
+#brush{
+  z-index:1;pointer-events:none;
+  /* 关键：画布内部用 source-over 绘制，与下层的相乘交给 CSS 混合。
+     绝不能把 globalCompositeOperation 设成 multiply —— 透明画布上 multiply
+     会以黑色为底，墨点会被吸成纯黑或直接消失。 */
+  mix-blend-mode:var(--grain-blend);
+}
+
+.grain{
+  position:fixed;inset:-50%;z-index:2;pointer-events:none;
+  opacity:var(--grain-opacity);
+  mix-blend-mode:var(--grain-blend);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='.42'/%3E%3C/svg%3E");
+  animation:grainShift 8s steps(6) infinite;
+  transition:opacity .7s ease;
+}
+@keyframes grainShift{
+  0%{transform:translate(0,0)}      16%{transform:translate(-3%,2%)}
+  33%{transform:translate(2%,-3%)}  50%{transform:translate(-2%,-2%)}
+  66%{transform:translate(3%,1%)}   83%{transform:translate(-1%,3%)}
+  100%{transform:translate(0,0)}
+}
+
+/* ==========================================================================
+   2. HUD 框架
+   ========================================================================== */
+.hud{position:fixed;z-index:6;pointer-events:none}
+.hud > *{pointer-events:auto}
+
+.hud--top{
+  top:0;left:0;right:0;
+  display:flex;justify-content:space-between;align-items:flex-start;
+  padding:clamp(18px,3.2vw,40px) clamp(18px,3.6vw,52px);
+}
+
+.brand{display:flex;align-items:center;gap:.7em}
+.brand__mark{color:var(--ink);opacity:.9;display:flex}
+.brand__mark svg{width:17px;height:17px}
+.brand__name{
+  font-family:var(--serif);font-size:15px;letter-spacing:.34em;
+  text-indent:.34em;font-weight:600;
+}
+.brand__sub{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.24em;
+  color:var(--ink-soft);text-transform:uppercase;margin-top:3px;
+}
+.brand__txt{display:flex;flex-direction:column}
+
+.counter{
+  display:flex;align-items:baseline;gap:.55em;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;
+  color:var(--ink-soft);
+}
+.counter__now{color:var(--cinnabar);font-size:12px;font-weight:600}
+.counter__bar{
+  width:clamp(48px,7vw,104px);height:1px;background:var(--rule);
+  position:relative;margin:0 .5em;align-self:center;
+}
+.counter__bar i{
+  position:absolute;inset:0 auto 0 0;background:var(--cinnabar);
+  transition:width .7s cubic-bezier(.22,1,.36,1);
+}
+
+.hud--bottom{
+  bottom:0;left:0;right:0;
+  display:flex;justify-content:space-between;align-items:flex-end;
+  padding:clamp(18px,3.2vw,40px) clamp(18px,3.6vw,52px);
+}
+
+/* ---------- 图标按钮 ---------- */
+.dock{display:flex;gap:2px}
+.icon-btn{
+  position:relative;
+  width:42px;height:42px;
+  display:grid;place-items:center;
+  background:none;border:1px solid transparent;
+  color:var(--ink-soft);
+  cursor:pointer;
+  transition:color .35s cubic-bezier(.22,1,.36,1),
+             border-color .35s cubic-bezier(.22,1,.36,1);
+}
+.icon-btn svg{width:16px;height:16px;display:block}
+.icon-btn::after{
+  content:"";position:absolute;inset:0;
+  background:radial-gradient(circle at 50% 50%,var(--ink-faint),transparent 68%);
+  opacity:0;transform:scale(.35);
+  transition:opacity .45s cubic-bezier(.22,1,.36,1),
+             transform .55s cubic-bezier(.16,1,.3,1);
+}
+.icon-btn:hover{color:var(--ink);border-color:var(--rule)}
+.icon-btn:hover::after{opacity:1;transform:scale(1)}
+.icon-btn:focus-visible{outline:1px solid var(--cinnabar);outline-offset:2px}
+.icon-btn.is-active{color:var(--cinnabar);border-color:var(--cinnabar)}
+.icon-btn__tip{
+  position:absolute;bottom:calc(100% + 9px);left:50%;
+  transform:translate(-50%,5px);
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;
+  color:var(--ink-soft);white-space:nowrap;
+  opacity:0;pointer-events:none;
+  transition:opacity .3s ease,transform .4s cubic-bezier(.16,1,.3,1);
+}
+.icon-btn:hover .icon-btn__tip{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- 出处 / 落款 ---------- */
+.sign{display:flex;align-items:flex-end;gap:clamp(14px,2.4vw,30px)}
+.sign__text{text-align:right}
+.sign__from{
+  font-family:var(--serif);font-size:clamp(13px,1.5vw,17px);
+  letter-spacing:.2em;text-indent:.2em;
+}
+.sign__tag{
+  margin-top:.6em;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.26em;
+  color:var(--ink-soft);text-transform:uppercase;
+}
+.seal{
+  width:clamp(34px,3.8vw,46px);aspect-ratio:1;
+  border:1.5px solid var(--cinnabar);color:var(--cinnabar);
+  display:grid;place-items:center;
+  writing-mode:vertical-rl;
+  font-family:var(--serif);font-weight:600;
+  font-size:clamp(11px,1.15vw,13px);
+  letter-spacing:.16em;
+  opacity:.9;
+  transition:opacity .5s ease;
+}
+.seal:hover{opacity:1}
+
+/* ==========================================================================
+   3. 舞台 —— 竖排诗句
+   ========================================================================== */
+.stage{
+  position:fixed;inset:0;z-index:5;
+  display:flex;align-items:center;justify-content:flex-end;
+  padding:clamp(76px,12vh,140px) clamp(24px,7vw,120px);
+  pointer-events:none;
+}
+.verse{
+  writing-mode:vertical-rl;
+  /* 竖排：字沿竖直方向排列，超出高度自动向左起新列（右起读）。
+     注意 —— 竖排下 line-height 控制的是"列间距"，字间距由 letter-spacing 管。
+     高度 / 字号 / 列数由 JS applyLayout() 精确反推后覆写，避免落单字。 */
+  height:62vh;
+  line-height:1.44;
+  letter-spacing:.04em;
+  font-family:var(--serif);
+  font-weight:500;
+  text-align:start;
+  pointer-events:none;
+  /* 双层光晕：内层把墨迹从笔画边缘推开，外层压住墨色大面积底噪 */
+  text-shadow:0 0 10px var(--halo), 0 0 40px var(--halo), 0 0 90px var(--halo);
+  transition:text-shadow .7s ease;
+}
+.verse .ch{
+  display:inline-block;
+  /* 关键：inline-block 的高度由 line-height 撑起。若不重置为 1，
+     竖排下每个字会被撑成 1.44em，一列白白少放三分之一字数，
+     16 字的诗本该两列却被挤成三列。列间距统一交给 .verse 的 line-height。 */
+  line-height:1;
+  will-change:transform;
+}
+.verse .ch__i{
+  display:inline-block;
+  /* 关键：竖排下 inline-block 的 auto 高度会回落到"字体的 normal line-height"
+     （宋体实测约 1.35em），而不是继承来的 line-height:1。结果每个字白胖 35%，
+     16 字的诗被挤成三列。必须显式钉死成 1em，字间距才等于字号。 */
+  height:1em;
+  animation:chIn 1.05s cubic-bezier(.16,1,.3,1) both;
+  animation-delay:calc(var(--i) * 52ms + var(--lag,0ms));
+}
+@keyframes chIn{
+  from{opacity:0;filter:blur(16px);transform:translateY(26px) scale(1.06)}
+  to  {opacity:1;filter:blur(0);transform:translateY(0) scale(1)}
+}
+.verse.is-leaving .ch__i{
+  animation:chOut .42s cubic-bezier(.5,0,.75,0) both;
+  animation-delay:calc(var(--i) * 18ms);
+}
+@keyframes chOut{
+  from{opacity:1;filter:blur(0);transform:translateY(0)}
+  to  {opacity:0;filter:blur(13px);transform:translateY(-24px)}
+}
+
+/* 巨型水印 —— 视差。刻意放在左下，与右侧竖排诗句形成对角平衡，
+   避免两团视觉重量叠在同一侧把画面压脏。 */
+.ghost{
+  position:fixed;
+  left:-5vw;bottom:-24vh;
+  z-index:1;
+  font-family:var(--serif);font-weight:700;
+  font-size:clamp(200px,36vw,640px);
+  line-height:.8;
+  color:var(--ink-ghost);
+  pointer-events:none;
+  user-select:none;
+  will-change:transform;
+  transition:color .7s ease;
+}
+
+/* ==========================================================================
+   4. 技术标注层
+   ========================================================================== */
+.ticks{
+  position:fixed;z-index:6;pointer-events:none;
+  font-family:var(--mono);font-size:9px;letter-spacing:.16em;
+  line-height:1.85;
+  white-space:pre-line;          /* 让 textContent 里的 \n 真正换行 */
+  color:var(--ink-soft);opacity:.72;
+}
+.ticks--bl{left:clamp(18px,3.6vw,52px);bottom:calc(clamp(18px,3.2vw,40px) + 46px)}
+.ticks--br{right:clamp(18px,3.6vw,52px);bottom:calc(clamp(18px,3.2vw,40px) + 46px);text-align:right}
+@media (max-width:900px){.ticks{display:none}}
+
+.corner{
+  position:fixed;z-index:6;width:11px;height:11px;pointer-events:none;
+  border-color:var(--ink-faint);border-style:solid;border-width:0;
+}
+.corner--tl{top:14px;left:14px;border-top-width:1px;border-left-width:1px}
+.corner--tr{top:14px;right:14px;border-top-width:1px;border-right-width:1px}
+.corner--bl{bottom:14px;left:14px;border-bottom-width:1px;border-left-width:1px}
+.corner--br{bottom:14px;right:14px;border-bottom-width:1px;border-right-width:1px}
+
+/* ==========================================================================
+   5. 代码面板
+   ========================================================================== */
+.panel{
+  position:fixed;top:0;right:0;bottom:0;z-index:9;
+  width:min(560px,92vw);
+  display:flex;flex-direction:column;
+  background:color-mix(in srgb,var(--paper) 88%,transparent);
+  backdrop-filter:blur(20px) saturate(1.2);
+  -webkit-backdrop-filter:blur(20px) saturate(1.2);
+  border-left:1px solid var(--rule);
+  transform:translateX(101%);
+  transition:transform .78s cubic-bezier(.16,1,.3,1);
+}
+.panel.is-open{transform:translateX(0)}
+.panel__bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px clamp(16px,2.4vw,26px);
+  border-bottom:1px solid var(--rule);
+  flex:none;
+}
+.panel__title{
+  display:flex;align-items:center;gap:.6em;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--ink-soft);
+}
+.panel__title svg{width:14px;height:14px}
+.panel__code{
+  flex:1;overflow:auto;margin:0;
+  padding:clamp(18px,2.4vw,28px);
+  font-family:var(--mono);font-size:clamp(11px,1.05vw,12.5px);
+  line-height:1.85;tab-size:4;
+  color:var(--ink);
+  scrollbar-width:thin;
+  scrollbar-color:var(--ink-faint) transparent;
+}
+.panel__code::-webkit-scrollbar{width:6px}
+.panel__code::-webkit-scrollbar-thumb{background:var(--ink-faint)}
+.panel__foot{
+  flex:none;padding:13px clamp(16px,2.4vw,26px);
+  border-top:1px solid var(--rule);
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;
+  color:var(--ink-soft);word-break:break-all;
+}
+.tok-kw{color:var(--cinnabar);font-weight:600}
+.tok-st{color:#7a6a4f}
+.tok-cm{color:var(--ink-soft);font-style:italic}
+.tok-nu{color:#5f7a6a}
+.tok-fn{color:var(--ink);font-weight:600}
+html[data-theme="ink"] .tok-st{color:#b39c72}
+html[data-theme="ink"] .tok-nu{color:#8fae97}
+
+/* ==========================================================================
+   6. 入场序幕
+   ========================================================================== */
+.veil{
+  position:fixed;inset:0;z-index:20;background:var(--paper);
+  transform-origin:top;
+  transition:transform 1.15s cubic-bezier(.76,0,.24,1);
+  pointer-events:none;
+}
+body.is-ready .veil{transform:scaleY(0)}
+
+.sweep{
+  position:fixed;top:0;left:0;height:1px;width:100%;z-index:21;
+  background:var(--ink);transform:scaleX(0);transform-origin:left;
+  animation:sweepIn 1.05s cubic-bezier(.76,0,.24,1) .18s forwards;
+  pointer-events:none;
+}
+@keyframes sweepIn{
+  0%{transform:scaleX(0);opacity:1}
+  62%{transform:scaleX(1);opacity:1}
+  100%{transform:scaleX(1);opacity:0}
+}
+
+[data-reveal]{opacity:0;transform:translateY(15px)}
+body.is-ready [data-reveal]{
+  opacity:1;transform:none;
+  transition:opacity 1s cubic-bezier(.22,1,.36,1),
+             transform 1.15s cubic-bezier(.16,1,.3,1);
+}
+body.is-ready [data-reveal="1"]{transition-delay:.55s}
+body.is-ready [data-reveal="2"]{transition-delay:.72s}
+body.is-ready [data-reveal="3"]{transition-delay:.9s}
+
+/* ==========================================================================
+   7. 响应式
+   ========================================================================== */
+@media (max-width:760px){
+  .stage{
+    align-items:flex-end;justify-content:flex-start;
+    padding:0 24px clamp(120px,20vh,180px);
+  }
+  .verse{
+    writing-mode:horizontal-tb;
+    height:auto !important;
+    max-width:100%;
+    line-height:1.5;
+    letter-spacing:.03em;
+  }
+  /* 注意 base 样式用的是 left，这里若还写 right 会同时生效，
+     元素被拉伸到整屏宽（left+right 双锚定），水印会错位 */
+  .ghost{font-size:62vw;left:-14vw;bottom:-10vh}
+  .sign__text{text-align:left}
+  .hud--top{flex-direction:column;gap:14px;align-items:flex-start}
+  .counter{align-self:flex-start}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms !important;
+    animation-delay:0ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+    transition-delay:0s !important;   /* 只压 duration 不够，delay 会让 HUD 干等 0.9s */
+  }
+  .grain{animation:none}
+  .verse .ch__i{animation:none}
+}
+</style>
+</head>
+<body>
+
+<!-- 渲染层 -->
+<canvas id="gl"></canvas>
+<canvas id="brush"></canvas>
+<div class="grain" aria-hidden="true"></div>
+
+<!-- 水印 -->
+<div class="ghost" id="ghost" aria-hidden="true">墨</div>
+
+<!-- 技术标注 -->
+<div class="corner corner--tl" aria-hidden="true"></div>
+<div class="corner corner--tr" aria-hidden="true"></div>
+<div class="corner corner--bl" aria-hidden="true"></div>
+<div class="corner corner--br" aria-hidden="true"></div>
+<div class="ticks ticks--bl" id="tickBL" aria-hidden="true"></div>
+<div class="ticks ticks--br" id="tickBR" aria-hidden="true"></div>
+
+<!-- 顶栏 -->
+<header class="hud hud--top">
+  <div class="brand" data-reveal="1">
+    <span class="brand__mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z"/>
+        <path d="M16 8 2 22"/>
+        <path d="M17.5 15H9"/>
+      </svg>
+    </span>
+    <span class="brand__txt">
+      <span class="brand__name">一言 · 墨</span>
+      <span class="brand__sub">Hitokoto / Ink</span>
+    </span>
+  </div>
+
+  <div class="counter" data-reveal="1">
+    <span class="counter__now" id="idxNow">01</span>
+    <span class="counter__bar"><i id="idxBar" style="width:16.6%"></i></span>
+    <span id="idxAll">06</span>
+  </div>
+</header>
+
+<!-- 舞台 -->
+<main class="stage">
+  <div class="verse" id="verse" aria-live="polite"></div>
+</main>
+
+<!-- 底栏 -->
+<footer class="hud hud--bottom" id="hudBottom">
+  <div class="dock" id="dock" data-reveal="3">
+    <button class="icon-btn" id="btnNext" aria-label="换一句">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+        <path d="M21 3v5h-5"/>
+        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+        <path d="M8 16H3v5"/>
+      </svg>
+      <span class="icon-btn__tip">换一句 · SPACE</span>
+    </button>
+
+    <button class="icon-btn" id="btnCopy" aria-label="复制句子">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+      </svg>
+      <span class="icon-btn__tip" id="copyTip">复制 · COPY</span>
+    </button>
+
+    <button class="icon-btn" id="btnCode" aria-label="查看接口实现">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m18 16 4-4-4-4"/>
+        <path d="m6 8-4 4 4 4"/>
+        <path d="m14.5 4-5 16"/>
+      </svg>
+      <span class="icon-btn__tip">接口实现 · CODE</span>
+    </button>
+
+    <button class="icon-btn" id="btnTheme" aria-label="切换纸墨">
+      <svg class="ico-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+      </svg>
+      <span class="icon-btn__tip">纸 / 墨 · THEME</span>
+    </button>
+  </div>
+
+  <div class="sign" id="sign" data-reveal="3">
+    <div class="sign__text">
+      <div class="sign__from" id="signFrom">—</div>
+      <div class="sign__tag" id="signTag">—</div>
+    </div>
+    <div class="seal" aria-hidden="true">一言</div>
+  </div>
+</footer>
+
+<!-- 代码面板 -->
+<aside class="panel" id="panel" aria-hidden="true">
+  <div class="panel__bar">
+    <div class="panel__title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m18 16 4-4-4-4"/>
+        <path d="m6 8-4 4 4 4"/>
+        <path d="m14.5 4-5 16"/>
+      </svg>
+      <span>get_hitokoto.py</span>
+    </div>
+    <button class="icon-btn" id="btnClose" aria-label="关闭面板" style="width:34px;height:34px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 6 6 18"/>
+        <path d="m6 6 12 12"/>
+      </svg>
+    </button>
+  </div>
+  <pre class="panel__code"><code id="codeBox"></code></pre>
+  <div class="panel__foot">GET https://v1.hitokoto.cn/?encode=json&amp;c=i &nbsp;//&nbsp; access-control-allow-origin: *</div>
+</aside>
+
+<!-- 序幕 -->
+<div class="veil" aria-hidden="true"></div>
+<div class="sweep" aria-hidden="true"></div>
+
+<!-- 诊断口（仅 #debug 时写入） -->
+<div id="probe" hidden></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ======================================================================
+     A. 语料 —— 静态致敬：不请求接口，全部为公有领域古典诗句
+     ====================================================================== */
+  var VERSES = [
+    { t:"如何肯到清秋日，已带斜阳又带蝉。", from:"一言 · 柳", tag:"诗 / 秋" },
+    { t:"疏影横斜水清浅，暗香浮动月黄昏。", from:"林逋《山园小梅》", tag:"诗 / 梅" },
+    { t:"醉后不知天在水，满船清梦压星河。", from:"唐温如《题龙阳县青草湖》", tag:"诗 / 梦" },
+    { t:"星垂平野阔，月涌大江流。",       from:"杜甫《旅夜书怀》", tag:"诗 / 夜" },
+    { t:"此心安处是吾乡。",               from:"苏轼《定风波》", tag:"词 / 归" },
+    { t:"落霞与孤鹜齐飞，秋水共长天一色。", from:"王勃《滕王阁序》", tag:"骈 / 秋" }
+  ];
+
+  /* ======================================================================
+     B. 诗句渲染 + 逐字入场
+     ====================================================================== */
+  var verse   = document.getElementById("verse");
+  var ghost   = document.getElementById("ghost");
+  var idxNow  = document.getElementById("idxNow");
+  var idxAll  = document.getElementById("idxAll");
+  var idxBar  = document.getElementById("idxBar");
+  var signFrom= document.getElementById("signFrom");
+  var signTag = document.getElementById("signTag");
+
+  var cur = 0;
+  var chars = [];              // { el, ox, oy, tx, ty, cx, cy, w, h }
+  var busy = false;
+  var DEBUG = location.hash.indexOf("debug") >= 0;
+
+  // 临时诊断：把真实渲染尺寸同步写进 DOM，配合 headless --dump-dom 读取
+  var probeBox = document.getElementById("probe");
+  function probe(){
+    if (!DEBUG || !probeBox) return;
+    var c = verse.querySelector(".ch");
+    var r = verse.getBoundingClientRect();
+    var cr = c ? c.getBoundingClientRect() : null;
+    var lr = chars.length ? chars[chars.length - 1].el.getBoundingClientRect() : null;
+    var inner = c && c.firstElementChild ? c.firstElementChild : null;
+    probeBox.textContent = "BOX size=" + verse.style.fontSize
+      + " h=" + verse.style.height
+      + " perCol=" + verse.dataset.percol + " cols=" + verse.dataset.cols
+      + " | verseH=" + r.height.toFixed(1)
+      + " | chOffsetW=" + (c ? c.offsetWidth : "-")
+      + " chOffsetH=" + (c ? c.offsetHeight : "-")
+      + " | chRectW=" + (cr ? cr.width.toFixed(1) : "-")
+      + " chRectH=" + (cr ? cr.height.toFixed(1) : "-")
+      + " | LHverse=" + getComputedStyle(verse).lineHeight
+      + " LHch=" + (c ? getComputedStyle(c).lineHeight : "-")
+      + " LHinner=" + (inner ? getComputedStyle(inner).lineHeight : "-")
+      + " inH=" + (inner ? inner.offsetHeight : "-")
+      + " | firstTop=" + (cr ? cr.top.toFixed(1) : "-")
+      + " lastTop=" + (lr ? lr.top.toFixed(1) : "-");
+    var hud = document.getElementById("hudBottom");
+    var dk  = document.getElementById("dock");
+    var sg  = document.getElementById("sign");
+    if (hud && dk && sg){
+      var hb = hud.getBoundingClientRect(), db = dk.getBoundingClientRect(), sb = sg.getBoundingClientRect();
+      probeBox.textContent += " | vw=" + window.innerWidth
+        + " hudW=" + hb.width.toFixed(1)
+        + " dock=[" + db.left.toFixed(0) + "," + db.right.toFixed(0) + "]"
+        + " sign=[" + sb.left.toFixed(0) + "," + sb.right.toFixed(0) + "] w=" + sb.width.toFixed(0);
+    }
+  }
+
+  idxAll.textContent = String(VERSES.length).padStart(2, "0");
+
+  // 版式核心：按字数决定列数 -> 由可用高度反推字号 -> 由字号反推容器高度。
+  // 这样是"字号服从容器"，而不是"容器等着字溢出"，落单字不会再出现。
+  var LS = 1.04;    // letter-spacing(.04em) 的占位因子
+  var LH = 1.44;    // 列间距因子，与 CSS line-height 保持一致
+
+  function applyLayout(n){
+    var vw = window.innerWidth, vh = window.innerHeight;
+
+    if (vw <= 760){
+      // 移动端走横排，字号只由宽度决定
+      verse.style.fontSize = Math.min(vw * 0.088, 46).toFixed(2) + "px";
+      verse.style.height = "";
+      verse.style.maxWidth = "";
+      return;
+    }
+
+    // 列数分档：短句独占一列才能放到极大（竖排的诗眼就该撑满屏），
+    // 长句才分列。用 ceil 平均分配，保证各列长度均匀不出现尾列落单。
+    var cols   = n <= 10 ? 1 : (n <= 20 ? 2 : 3);
+    var perCol = Math.ceil(n / cols);
+    var stageH = Math.min(vh * 0.68, 760);
+
+    var size = stageH / (perCol * LS);            // 高度约束
+    size = Math.min(size, vh * 0.22);             // 单字上限，防极少字数时炸屏
+
+    var stageW = Math.min(vw * 0.54, 880);
+    size = Math.min(size, stageW / (cols * LH));  // 宽度约束
+
+    verse.style.fontSize = size.toFixed(2) + "px";
+    verse.style.height   = (size * perCol * LS + 6).toFixed(1) + "px";
+    verse.style.maxWidth = (size * LH * cols + 4).toFixed(1) + "px";
+    verse.dataset.percol = perCol;
+    verse.dataset.cols   = cols;
+  }
+
+  function paint(i, lag){
+    var v = VERSES[i];
+    cur = i;
+    applyLayout(v.t.length);
+
+    var html = "";
+    for (var k = 0; k < v.t.length; k++){
+      var c = v.t[k];
+      var cls = (c === "，" || c === "。") ? "ch ch--punc" : "ch";
+      html += '<span class="' + cls + '" style="--i:' + k + ';--lag:' + (lag||0) + 'ms">'
+            +   '<span class="ch__i">' + c + '</span>'
+            + '</span>';
+    }
+    verse.innerHTML = html;
+
+    signFrom.textContent = v.from;
+    signTag.textContent  = v.tag;
+    idxNow.textContent   = String(i + 1).padStart(2, "0");
+    idxBar.style.width   = (((i + 1) / VERSES.length) * 100).toFixed(1) + "%";
+
+    collectChars();
+    probe();   // 同步测量（会强制一次布局），供 #debug 诊断
+    // 浏览器完成一次布局后再量字的位置，否则磁吸圆心是错的
+    requestAnimationFrame(function(){ requestAnimationFrame(measure); });
+    return v;
+  }
+
+  function collectChars(){
+    chars = [];
+    var list = verse.querySelectorAll(".ch");
+    for (var i = 0; i < list.length; i++){
+      chars.push({ el:list[i], ox:0, oy:0, tx:0, ty:0, cx:0, cy:0, w:0, h:0 });
+    }
+    measure();
+  }
+
+  function measure(){
+    for (var i = 0; i < chars.length; i++){
+      var c = chars[i];
+      var r = c.el.getBoundingClientRect();
+      c.cx = r.left + r.width  / 2;
+      c.cy = r.top  + r.height / 2;
+      c.w  = r.width;
+      c.h  = r.height;
+    }
+  }
+
+  function next(){
+    if (busy) return;
+    busy = true;
+    verse.classList.add("is-leaving");
+    var waitOut = reduced ? 60 : 300 + chars.length * 18;
+
+    setTimeout(function(){
+      cur = (cur + 1) % VERSES.length;
+      verse.classList.remove("is-leaving");
+      paint(cur, 0);
+      inkShift();                     // 墨迹重落
+      setTimeout(function(){ busy = false; }, reduced ? 60 : 700);
+    }, waitOut);
+  }
+
+  /* ======================================================================
+     C. WebGL —— 墨晕场（域扭曲 fbm + 指针笔触）
+     ====================================================================== */
+  var glc = document.getElementById("gl");
+  var gl = null;
+
+  var VS = [
+    "attribute vec2 a_pos;",
+    "void main(){ gl_Position = vec4(a_pos, 0.0, 1.0); }"
+  ].join("\n");
+
+  var FS = [
+    "precision highp float;",
+    "uniform vec2  u_res;",
+    "uniform float u_time;",
+    "uniform vec2  u_mouse;",
+    "uniform float u_press;",
+    "uniform float u_theme;",
+    "uniform float u_shift;",
+    "",
+    "float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }",
+    "",
+    "float vnoise(vec2 p){",
+    "  vec2 i = floor(p);",
+    "  vec2 f = fract(p);",
+    "  vec2 u = f * f * (3.0 - 2.0 * f);",
+    "  float a = hash(i);",
+    "  float b = hash(i + vec2(1.0, 0.0));",
+    "  float c = hash(i + vec2(0.0, 1.0));",
+    "  float d = hash(i + vec2(1.0, 1.0));",
+    "  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);",
+    "}",
+    "",
+    "float fbm(vec2 p){",
+    "  float v = 0.0;",
+    "  float a = 0.5;",
+    "  mat2 rot = mat2(1.62, 1.20, -1.20, 1.62);",
+    "  for (int i = 0; i < 5; i++){",
+    "    v += a * vnoise(p);",
+    "    p = rot * p;",
+    "    a *= 0.5;",
+    "  }",
+    "  return v;",
+    "}",
+    "",
+    "void main(){",
+    "  vec2 uv = gl_FragCoord.xy / u_res;",
+    "  float mn = min(u_res.x, u_res.y);",
+    "  vec2 p = (gl_FragCoord.xy - 0.5 * u_res) / mn;",
+    "  float t = u_time * 0.032 + u_shift;",
+    "",
+    "  vec2 q = vec2(fbm(p * 2.00 + vec2(0.0, t)),",
+    "                fbm(p * 2.00 + vec2(4.7, 1.3) - t * 0.8));",
+    "  vec2 r = vec2(fbm(p * 2.80 + 3.4 * q + vec2(1.7, 9.2) + t * 1.2),",
+    "                fbm(p * 2.80 + 3.4 * q + vec2(8.3, 2.8) - t * 1.1));",
+    "  float f = fbm(p * 2.05 + 1.9 * r);",
+    "",
+    "  vec2 m = (u_mouse - 0.5) * u_res / mn;",
+    "  float d = length(p - m);",
+    "  float brush = exp(-d * d * 7.0);",
+    "  brush *= (0.28 + u_press * 1.15);",
+    "  brush *= 0.74 + 0.26 * sin(u_time * 1.7 - d * 5.0);",
+    "",
+    "  float ink = f * 0.86 + brush * 0.78;",
+    "  ink = smoothstep(0.44, 0.88, ink);",
+    "",
+    "  float tone = clamp(f * 0.6 + brush * 0.4, 0.0, 1.0);",
+    "",
+    "  vec3 paperA = vec3(0.969, 0.957, 0.925);",
+    "  vec3 paperB = vec3(0.906, 0.888, 0.838);",
+    "  vec3 inkDarkA = vec3(0.071, 0.063, 0.055);",
+    "  vec3 inkDarkB = vec3(0.212, 0.188, 0.161);",
+    "  vec3 paperC = vec3(0.033, 0.028, 0.025);",
+    "  vec3 paperD = vec3(0.075, 0.064, 0.055);",
+    "  vec3 inkLitA = vec3(0.780, 0.760, 0.712);",
+    "  vec3 inkLitB = vec3(0.400, 0.378, 0.336);",
+    "",
+    "  vec3 paper = mix(mix(paperA, paperB, uv.y), mix(paperC, paperD, uv.y), u_theme);",
+    "  vec3 inkc  = mix(mix(inkDarkA, inkDarkB, tone), mix(inkLitA, inkLitB, 1.0 - tone), u_theme);",
+    "",
+    "  float amt = mix(0.24, 0.30, u_theme);",
+    "  vec3 col = mix(paper, inkc, ink * amt);",
+    "",
+    "  float vig = 1.0 - smoothstep(0.34, 0.98, length(uv - 0.5));",
+    "  col *= mix(0.87, 1.0, vig);",
+    "",
+    "  float g = hash(gl_FragCoord.xy + fract(u_time) * 173.0);",
+    "  col += (g - 0.5) * 0.016;",
+    "",
+    "  gl_FragColor = vec4(col, 1.0);",
+    "}"
+  ].join("\n");
+
+  var U = null;
+  var themeVal = 0, themeTarget = 0;
+  var shiftTarget = 0;
+  var mx = 0.5, my = 0.5;
+  // smy 起步于画面下方之外：着色器把"指针"当作笔尖，若初始落在 (0.5,0.5)，
+  // 加载瞬间就会在屏幕正中凭空点出一滴墨，看起来像渲染瑕疵。
+  var smx = 0.5, smy = 1.65;
+  var press = 0, spress = 0;
+  var glOK = false;
+  var startT = performance.now();
+
+  function initGL(){
+    try {
+      gl = glc.getContext("webgl", { antialias:false, alpha:false, depth:false, powerPreference:"high-performance" })
+        || glc.getContext("experimental-webgl", { antialias:false, alpha:false, depth:false });
+    } catch(e){ gl = null; }
+    if (!gl) return false;
+
+    var vs = compile(gl.VERTEX_SHADER, VS);
+    var fs = compile(gl.FRAGMENT_SHADER, FS);
+    if (!vs || !fs) return false;
+
+    var prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return false;
+    gl.useProgram(prog);
+
+    var buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+
+    var loc = gl.getAttribLocation(prog, "a_pos");
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+    U = {
+      res:   gl.getUniformLocation(prog, "u_res"),
+      time:  gl.getUniformLocation(prog, "u_time"),
+      mouse: gl.getUniformLocation(prog, "u_mouse"),
+      press: gl.getUniformLocation(prog, "u_press"),
+      theme: gl.getUniformLocation(prog, "u_theme"),
+      shift: gl.getUniformLocation(prog, "u_shift")
+    };
+    return true;
+  }
+
+  function compile(type, src){
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+      if (window.console) console.warn(gl.getShaderInfoLog(s));
+      return null;
+    }
+    return s;
+  }
+
+  function resizeGL(){
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = Math.floor(window.innerWidth  * dpr);
+    var h = Math.floor(window.innerHeight * dpr);
+    if (gl) { glc.width = w; glc.height = h; gl.viewport(0, 0, w, h); }
+  }
+
+  function inkShift(){ shiftTarget += 6.0; }
+
+  /* ======================================================================
+     D. Canvas 2D —— 笔锋墨点
+     ====================================================================== */
+  var bc   = document.getElementById("brush");
+  var bx   = bc.getContext("2d");
+  var drops = [];
+  var bufW = 0, bufH = 0;
+
+  function resizeBrush(){
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    bufW = Math.floor(window.innerWidth  * dpr);
+    bufH = Math.floor(window.innerHeight * dpr);
+    bc.width = bufW; bc.height = bufH;
+  }
+
+  function spawn(x, y, power){
+    if (drops.length > 340) return;
+    var n = 1 + Math.floor(power * 3);
+    for (var i = 0; i < n; i++){
+      drops.push({
+        x: x * (bufW / window.innerWidth)  + (Math.random() - 0.5) * 16,
+        y: y * (bufH / window.innerHeight) + (Math.random() - 0.5) * 16,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: (Math.random() - 0.5) * 0.5,
+        r: (6 + Math.random() * 20) * (bufW / window.innerWidth) * (0.55 + power * 0.85),
+        life: 1
+      });
+    }
+  }
+
+  function drawBrush(){
+    var inkRgb = themeTarget > 0.5 ? "232,228,217" : "26,23,19";
+    bx.clearRect(0, 0, bufW, bufH);
+    // 保持默认 source-over 绘制；与下层墨晕的相乘交给 canvas 元素的 CSS 混合模式
+    for (var i = drops.length - 1; i >= 0; i--){
+      var d = drops[i];
+      d.x += d.vx; d.y += d.vy;
+      d.vx *= 0.985; d.vy *= 0.985;
+      d.life -= 0.016;
+      if (d.life <= 0){ drops.splice(i, 1); continue; }
+
+      var a = d.life * d.life * 0.62;
+      var g = bx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r);
+      g.addColorStop(0,   "rgba(" + inkRgb + "," + a.toFixed(4) + ")");
+      g.addColorStop(0.5, "rgba(" + inkRgb + "," + (a * 0.34).toFixed(4) + ")");
+      g.addColorStop(1,   "rgba(" + inkRgb + ",0)");
+      bx.fillStyle = g;
+      bx.beginPath();
+      bx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+      bx.fill();
+    }
+  }
+
+  /* ======================================================================
+     E. 主循环 —— 指针磁吸 / 视差 / 渲染
+     ====================================================================== */
+  var px = -9999, py = -9999;
+  var ghostX = 0, ghostY = 0;
+  var frame = 0, fpsT = performance.now(), fpsN = 0;
+  var MW = window.innerWidth, MH = window.innerHeight;
+
+  var tickBL = document.getElementById("tickBL");
+  var tickBR = document.getElementById("tickBR");
+
+  function loop(now){
+    requestAnimationFrame(loop);
+    frame++;
+    var el = (now - startT) / 1000;
+
+    // —— 平滑插值 ——
+    smx += (mx - smx) * 0.055;
+    smy += (my - smy) * 0.055;
+    spress += (press - spress) * 0.09;
+    themeVal += (themeTarget - themeVal) * 0.075;
+    shiftTarget *= 0.94;
+    ghostX += ((mx - 0.5) * -52 - ghostX) * 0.045;
+    ghostY += ((my - 0.5) * -34 - ghostY) * 0.045;
+
+    // —— WebGL ——
+    if (glOK){
+      gl.uniform2f(U.res, glc.width, glc.height);
+      gl.uniform1f(U.time, el);
+      gl.uniform2f(U.mouse, smx, 1.0 - smy);
+      gl.uniform1f(U.press, spress);
+      gl.uniform1f(U.theme, themeVal);
+      gl.uniform1f(U.shift, shiftTarget);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+
+    // —— 字符磁吸 ——
+    var changed = false;
+    for (var i = 0; i < chars.length; i++){
+      var c = chars[i];
+      var tx = 0, ty = 0;
+      if (px > -9000){
+        var dx = c.cx - px, dy = c.cy - py;
+        var dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        var R = Math.max(120, c.h * 2.4);
+        if (dist < R){
+          var fall = 1 - dist / R;
+          var force = fall * fall * (c.h * 0.30) * (1 + spress * 1.4);
+          tx = (dx / dist) * force;
+          ty = (dy / dist) * force;
+        }
+      }
+      if (Math.abs(tx - c.tx) > 0.05 || Math.abs(ty - c.ty) > 0.05) changed = true;
+      c.tx = tx; c.ty = ty;
+      c.ox += (c.tx - c.ox) * 0.13;
+      c.oy += (c.ty - c.oy) * 0.13;
+      if (Math.abs(c.ox) > 0.02 || Math.abs(c.oy) > 0.02 || changed){
+        c.el.style.transform = "translate(" + c.ox.toFixed(2) + "px," + c.oy.toFixed(2) + "px)";
+      }
+    }
+
+    // —— 水印视差 ——
+    ghost.style.transform = "translate3d(" + ghostX.toFixed(1) + "px," + ghostY.toFixed(1) + "px,0)";
+
+    // —— 笔锋 ——
+    drawBrush();
+
+    // —— HUD 读数（每 12 帧刷一次，省开销）——
+    if (frame % 12 === 0){
+      fpsN++;
+      var dt = now - fpsT;
+      if (dt > 480){
+        var fps = Math.round(fpsN / (dt / 1000));
+        tickBR.textContent = "X " + Math.round(smx * 1000) + "  Y " + Math.round((1 - smy) * 1000)
+                           + "\n" + fps + " FPS  " + (glOK ? "GLSL" : "CSS");
+        fpsT = now; fpsN = 0;
+      }
+      tickBL.textContent = "INK FIELD / " + (glOK ? "WEBGL" : "CSS") + "\n"
+                         + VERSES[cur].t.length + " 字  ·  " + (cur + 1) + " / " + VERSES.length;
+    }
+  }
+
+  /* ======================================================================
+     F. 交互绑定
+     ====================================================================== */
+  var moveAcc = 0;
+  function onMove(x, y){
+    px = x; py = y;
+    mx = x / MW; my = y / MH;
+    // 隔帧撒墨，避免指针快速划过时粒子瞬间爆量
+    if ((moveAcc++ & 1) === 0) spawn(x, y, spress);
+  }
+
+  document.addEventListener("pointermove", function(e){
+    onMove(e.clientX, e.clientY);
+  }, { passive:true });
+
+  document.addEventListener("pointerdown", function(e){
+    press = 1;
+    spawn(e.clientX, e.clientY, 1.35);
+  });
+
+  document.addEventListener("pointerup", function(){ press = 0; });
+  document.addEventListener("pointerleave", function(){ px = -9999; py = -9999; press = 0; });
+
+  // 换句
+  document.getElementById("btnNext").addEventListener("click", next);
+
+  // 复制
+  var copyTip = document.getElementById("copyTip");
+  document.getElementById("btnCopy").addEventListener("click", function(){
+    var txt = VERSES[cur].t + " —— " + VERSES[cur].from;
+    var done = function(){
+      copyTip.textContent = "已复制";
+      setTimeout(function(){ copyTip.textContent = "复制 · COPY"; }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(done, function(){ fallbackCopy(txt, done); });
+    } else { fallbackCopy(txt, done); }
+  });
+
+  function fallbackCopy(txt, done){
+    var ta = document.createElement("textarea");
+    ta.value = txt;
+    ta.style.cssText = "position:fixed;opacity:0;pointer-events:none";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); done(); } catch(e){}
+    document.body.removeChild(ta);
+  }
+
+  // 代码面板
+  var panel = document.getElementById("panel");
+  var btnCode = document.getElementById("btnCode");
+  function setPanel(open){
+    panel.classList.toggle("is-open", open);
+    panel.setAttribute("aria-hidden", open ? "false" : "true");
+    btnCode.classList.toggle("is-active", open);
+  }
+  btnCode.addEventListener("click", function(){ setPanel(!panel.classList.contains("is-open")); });
+  document.getElementById("btnClose").addEventListener("click", function(){ setPanel(false); });
+
+  // 主题
+  var btnTheme = document.getElementById("btnTheme");
+  btnTheme.addEventListener("click", function(){
+    var ink = document.documentElement.getAttribute("data-theme") === "ink";
+    document.documentElement.setAttribute("data-theme", ink ? "paper" : "ink");
+    themeTarget = ink ? 0 : 1;
+    inkShift();
+  });
+
+  // 键盘
+  document.addEventListener("keydown", function(e){
+    if (e.code === "Space" || e.code === "ArrowRight" || e.code === "ArrowDown"){
+      e.preventDefault(); next();
+    }
+    if (e.code === "ArrowLeft" || e.code === "ArrowUp"){
+      e.preventDefault();
+      busy = true;
+      cur = (cur - 1 + VERSES.length) % VERSES.length;
+      paint(cur, 0); inkShift();
+      setTimeout(function(){ busy = false; }, 640);
+    }
+    if (e.key === "c" || e.key === "C"){ btnCode.click(); }
+    if (e.key === "t" || e.key === "T"){ btnTheme.click(); }
+    if (e.key === "Escape"){ setPanel(false); }
+  });
+
+  // 尺寸
+  function onResize(){
+    MW = window.innerWidth; MH = window.innerHeight;
+    resizeGL(); resizeBrush();
+    applyLayout(VERSES[cur].t.length);
+    requestAnimationFrame(function(){ requestAnimationFrame(measure); });
+  }
+  window.addEventListener("resize", onResize);
+
+  /* ======================================================================
+     G. 代码面板 —— 轻量 Python 高亮
+     ====================================================================== */
+  var SRC = [
+    "import requests",
+    "from rich import print as rprint",
+    "",
+    "",
+    "def get_hitokoto(category=None):",
+    "    \"\"\"",
+    "    请求一言接口，返回一个包含句子信息的字典。",
+    "    :param category: 可选，句子类型代码，如 'a' 表示动画，'i' 表示诗词。",
+    "    :return: 解析后的 JSON 字典，失败返回 None",
+    "    \"\"\"",
+    "    base_url = \"https://v1.hitokoto.cn/\"",
+    "    params = {\"encode\": \"json\"}",
+    "    if category:",
+    "        params[\"c\"] = category",
+    "",
+    "    try:",
+    "        response = requests.get(base_url, params=params, timeout=5)",
+    "        response.raise_for_status()",
+    "        return response.json()",
+    "    except requests.RequestException as e:",
+    "        print(f\"请求失败: {e}\")",
+    "        return None",
+    "",
+    "",
+    "data = get_hitokoto(category=\"i\")",
+    "if data:",
+    "    rprint(data)"
+  ].join("\n");
+
+  var TOK = /(#[^\n]*)|("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|\b(def|return|if|elif|else|import|from|as|try|except|finally|for|in|while|class|with|None|True|False|not|and|or|is|pass|raise|lambda|yield|async|await|global|nonlocal|break|continue)\b|\b(\d+(?:\.\d+)?)\b|([A-Za-z_]\w*)(?=\()/g;
+
+  function esc(s){
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function highlight(src){
+    var out = "", last = 0, m;
+    TOK.lastIndex = 0;
+    while ((m = TOK.exec(src)) !== null){
+      out += esc(src.slice(last, m.index));
+      var cls = m[1] ? "cm" : m[2] ? "st" : m[3] ? "kw" : m[4] ? "nu" : "fn";
+      out += '<span class="tok-' + cls + '">' + esc(m[0]) + "</span>";
+      last = m.index + m[0].length;
+      if (m[0].length === 0) TOK.lastIndex++;
+    }
+    out += esc(src.slice(last));
+    return out;
+  }
+
+  document.getElementById("codeBox").innerHTML = highlight(SRC);
+
+  /* ======================================================================
+     H. 启动
+     ====================================================================== */
+  // 锚点：#ink 墨夜模式 / #v3 指定第 4 句 / #debug 打开诊断口，可组合
+  if (location.hash.replace("#", "").indexOf("ink") >= 0){
+    document.documentElement.setAttribute("data-theme", "ink");
+    themeTarget = 1;
+    themeVal = 1;          // 跳过过渡，首帧即墨色
+  }
+  var vm = location.hash.match(/v(\d+)/);
+  if (vm){
+    var vk = parseInt(vm[1], 10);
+    if (vk >= 0 && vk < VERSES.length) cur = vk;
+  }
+
+  glOK = initGL();
+  if (!glOK){
+    glc.style.background = "radial-gradient(120% 100% at 78% 22%, rgba(26,23,19,.10), transparent 60%), radial-gradient(90% 90% at 12% 88%, rgba(26,23,19,.07), transparent 62%)";
+  }
+
+  resizeGL();
+  resizeBrush();
+  paint(cur, 380);   // cur 可能已被 #v<n> 锚点改写
+  if (location.hash.indexOf("panel") >= 0) setPanel(true);   // #panel 直接展开代码面板
+
+  requestAnimationFrame(loop);
+
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){ document.body.classList.add("is-ready"); });
+  });
+
+  setTimeout(measure, 1200);
+  window.addEventListener("load", function(){ setTimeout(measure, 260); });
+
+})();
+</script>
+<script>
+/* 兜底防线：主脚本若因任何原因中断（WebGL 异常、语法被外部注入破坏等），
+   序幕遮罩会永久盖住页面。这里独立于主流程保证它一定会撤场。 */
+setTimeout(function () {
+  if (!document.body.classList.contains("is-ready")) {
+    document.body.classList.add("is-ready");
+  }
+}, 2500);
+</script>
+</body>
+</html>

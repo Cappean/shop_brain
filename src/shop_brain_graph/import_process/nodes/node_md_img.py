@@ -77,6 +77,8 @@ def node_md_img(state: ImportGraphState) -> ImportGraphState:
     # 3用正则去匹配md 文档里面的内容。去得到上下文。
     # 最后放到一个列表里面 
     images_info_list = []
+    # 每个原始图片路径对应一个摘要，避免所有图片误用最后一次生成的摘要。
+    image_summary_map = {}
     for image in images_dir.iterdir():
         image_name = image.name
         search_target = re.escape(image_name) # 使用 re.escape() 函数来转义特殊字符
@@ -116,6 +118,9 @@ def node_md_img(state: ImportGraphState) -> ImportGraphState:
             ]
         )
         summary_result = chain.invoke([message])
+        # 在循环内立刻保存，match.group(2) 是这张图片在 Markdown 中的原始路径。
+        image_summary_map[match.group(2)] = summary_result.strip()
+        logger.info(f"图片摘要已记录：{image_name}")
         
         logger.error(f"这是这个图片的摘要: {summary_result}")
 
@@ -152,6 +157,41 @@ def node_md_img(state: ImportGraphState) -> ImportGraphState:
         logger.info(f"图片上传完成：{image_url_map[image_name]}")
 
     # 只替换 Markdown 图片语法中的 URL，保留 alt 文本。
+    # 先填入摘要，再执行下面已有的 URL 替换逻辑。
+    # 使用原始路径查找摘要，可以让每张图片使用自己的摘要。
+    def replace_image_summary(match):
+        original_path = match.group(2)
+        summary = image_summary_map.get(original_path)
+        if not summary:
+            # 模型没有返回有效摘要时，保留原来的图片文本。
+            logger.warning(f"图片摘要为空，保留原文本：{original_path}")
+            return match.group(0)
+
+        # alt 文本位于方括号内：先合并换行，再转义反斜杠和方括号，
+        # 防止摘要里的这些字符破坏 ![摘要](图片路径) 的 Markdown 结构。
+        summary = " ".join(summary.splitlines())
+        summary = summary.replace("\\", "\\\\")
+        summary = summary.replace("[", "\\[").replace("]", "\\]")
+        logger.info(f"替换图片摘要：{original_path}")
+        return f"![{summary}]({original_path})"
+
+    summary_pattern = re.compile(r"!\[(.*?)\]\(([^)]*)\)")
+    state["md_content"] = summary_pattern.sub(replace_image_summary, state["md_content"])
+
+    # 上面的摘要可能含有转义后的方括号，普通的 [^\]]* 无法完整匹配它。
+    # 因此这里先同时替换摘要和 URL；下面原有的代码保留，仍可处理普通图片语法。
+    combined_pattern = re.compile(r"!\[((?:\\.|[^\]\\])*)\]\(([^)]*)\)")
+
+    def replace_summary_image_url(match):
+        original_path = match.group(2)
+        image_name = Path(original_path).name
+        image_url = image_url_map.get(image_name)
+        if image_url is None:
+            return match.group(0)
+        logger.info(f"替换带摘要的图片 URL：{original_path} -> {image_url}")
+        return f"![{match.group(1)}]({image_url})"
+
+    state["md_content"] = combined_pattern.sub(replace_summary_image_url, state["md_content"])
     markdown_image_pattern = re.compile(r"(!\[[^\]]*\]\()([^)]*)(\))")
     def replace_image_url(match):
         for image_name, image_url in image_url_map.items():
@@ -164,6 +204,7 @@ def node_md_img(state: ImportGraphState) -> ImportGraphState:
     # 保存为新文件，保留原始 Markdown 不被覆盖。
     processed_md_path = md_path.with_name(f"{md_path.stem}_processed{md_path.suffix}")
     processed_md_path.write_text(state["md_content"], encoding="utf-8")
+    state["md_path"] = processed_md_path
     logger.info(f"处理后的 Markdown 已保存：{processed_md_path}")
 
     add_done_task(state["task_id"],"node_md_img")
